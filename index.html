@@ -1,4 +1,36 @@
 <!DOCTYPE html>
+<!--
+    FluidAI Portfolio - GitHub Pages Ready
+    
+    SETUP FOR GITHUB PAGES:
+    1. Create a GitHub repository
+    2. Add this index.html file to the root
+    3. Create an 'articles/' folder with your content:
+       - Each article should be in its own subfolder (e.g., articles/my-project/)
+       - Include a markdown file (article.md or README.md)
+       - Add videos/GIFs in the same folder
+       - Frontmatter example:
+         ---
+         title: "My Project"
+         subtitle: "Short description"
+         date: "2023-12-01"
+         tags: ["CFD", "Analysis"]
+         ---
+    4. Enable GitHub Pages in repository Settings > Pages
+    5. Choose "Deploy from a branch" and select your main branch
+    
+    CONFIGURATION:
+    - Auto-detects repository info for GitHub Pages
+    - Manual override available by setting manualConfig.enabled = true
+    - Modify the fallback values in portfolioConfig if needed
+    
+    FEATURES:
+    - Responsive design with video/GIF previews
+    - Static GIF previews that play on click
+    - Modal article viewer
+    - GitHub API integration with caching
+    - CORS-friendly media handling
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -227,6 +259,57 @@
             margin: 1rem 0;
         }
 
+        .article-gif {
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .article-gif.gif-paused {
+            position: relative;
+            transition: filter 0.3s ease;
+        }
+
+        /* Enhanced visual feedback for paused state */
+        .article-gif.gif-paused {
+            filter: brightness(0.8) contrast(1.1);
+        }
+
+        .article-gif.gif-paused::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .article-gif.gif-paused::after {
+            content: '▶';
+            position: absolute;
+            top: 50%;
+            left: 52%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 28px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        .article-gif.gif-paused:hover::before,
+        .article-gif.gif-paused:hover::after {
+            opacity: 1;
+        }
+
         .loading-spinner {
             display: inline-block;
             width: 20px;
@@ -257,6 +340,118 @@
             padding: 1rem;
             border-radius: 0.5rem;
             margin: 1rem 0;
+        }
+
+        /* Preview media styles */
+        .preview-media {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        .preview-media.loaded {
+            opacity: 0.7;
+        }
+
+        .preview-media:hover {
+            opacity: 0.9;
+        }
+
+        /* GIF preview controls */
+        .gif-preview {
+            cursor: pointer;
+        }
+
+        .gif-preview.playing {
+            opacity: 1;
+        }
+
+        /* CSS to help pause GIF animation by replacing with static version */
+        .gif-paused {
+            position: relative;
+            cursor: pointer;
+            filter: brightness(0.8) contrast(1.1);
+            transition: filter 0.3s ease;
+        }
+
+        .gif-paused::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .gif-paused::after {
+            content: '▶';
+            position: absolute;
+            top: 50%;
+            left: 52%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        .gif-paused:hover::before,
+        .gif-paused:hover::after {
+            opacity: 1;
+        }
+
+        .preview-container {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .preview-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(45deg, rgba(0,0,0,0.3), rgba(0,0,0,0.1));
+            z-index: 5;
+        }
+
+        /* Skeleton loading for media */
+        .media-skeleton {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .media-loaded .media-skeleton {
+            display: none;
+        }
+
+        .text-shadow {
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .text-shadow-lg {
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
         }
     </style>
 </head>
@@ -900,15 +1095,81 @@
             nav.style.background = window.scrollY > 100 ? 'rgba(15, 23, 42, 0.95)' : 'rgba(15, 23, 42, 0.9)';
         });
 
-        // Portfolio configuration
-        const portfolioConfig = {
+        // Manual configuration (set these if auto-detection doesn't work)
+        const manualConfig = {
+            enabled: false, // Set to true to use manual config instead of auto-detection
             githubUser: 'russellShyvers',
             githubRepo: 'Example',
             githubBranch: 'main',
-            articlesPath: 'articles',
+            articlesPath: 'articles'
+        };
+
+        // Portfolio configuration
+        const portfolioConfig = {
+            // GitHub Pages configuration - automatically detects current repository
+            githubUser: (() => {
+                // Check for manual config first
+                if (manualConfig.enabled) {
+                    return manualConfig.githubUser;
+                }
+                // Try to auto-detect from the current page URL for GitHub Pages
+                const currentUrl = window.location.hostname;
+                if (currentUrl.includes('github.io')) {
+                    const parts = currentUrl.split('.');
+                    return parts[0]; // username from username.github.io
+                }
+                // Fallback - you can manually set this
+                return 'lamprey'; // Change this to your GitHub username
+            })(),
+            githubRepo: (() => {
+                // Check for manual config first
+                if (manualConfig.enabled) {
+                    return manualConfig.githubRepo;
+                }
+                // Try to auto-detect repository name from GitHub Pages URL
+                const pathname = window.location.pathname;
+                if (pathname !== '/' && pathname.includes('/')) {
+                    const parts = pathname.split('/').filter(p => p);
+                    return parts[0]; // first part is usually repo name for GitHub Pages
+                }
+                // Fallback - you can manually set this
+                return 'FluidAI'; // Change this to your repository name
+            })(),
+            githubBranch: manualConfig.enabled ? manualConfig.githubBranch : 'main',
+            articlesPath: manualConfig.enabled ? manualConfig.articlesPath : 'articles',
             cache: new Map(),
             cacheExpiry: 5 * 60 * 1000, // 5 minutes
+            
+            // GitHub Pages specific settings
+            isGitHubPages: window.location.hostname.includes('github.io') || window.location.hostname.includes('github.com'),
+            baseUrl: (() => {
+                // For GitHub Pages, construct the proper base URL
+                if (window.location.hostname.includes('github.io')) {
+                    return window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
+                }
+                return window.location.origin;
+            })()
         };
+
+        // GitHub Pages repository detection
+        function detectRepositoryInfo() {
+            const hostname = window.location.hostname;
+            const pathname = window.location.pathname;
+            
+            console.log('Detecting repository info for GitHub Pages...');
+            console.log('Hostname:', hostname);
+            console.log('Pathname:', pathname);
+            console.log('Detected User:', portfolioConfig.githubUser);
+            console.log('Detected Repo:', portfolioConfig.githubRepo);
+            console.log('Base URL:', portfolioConfig.baseUrl);
+            
+            return {
+                isGitHubPages: portfolioConfig.isGitHubPages,
+                user: portfolioConfig.githubUser,
+                repo: portfolioConfig.githubRepo,
+                branch: portfolioConfig.githubBranch
+            };
+        }
 
         // Utility functions
         function showLoading(container, message = 'Loading...') {
@@ -921,10 +1182,34 @@
         }
 
         function showError(container, message) {
+            const repoInfo = detectRepositoryInfo();
             container.innerHTML = `
                 <div class="error-message">
                     <h3 class="font-semibold mb-2">Error Loading Portfolio</h3>
                     <p>${message}</p>
+                    
+                    ${repoInfo.isGitHubPages ? `
+                        <div class="mt-4 p-4 bg-blue-900/30 border border-blue-500/30 rounded-lg">
+                            <h4 class="font-semibold text-blue-300 mb-2">GitHub Pages Setup</h4>
+                            <p class="text-sm text-blue-200 mb-2">Make sure your repository has:</p>
+                            <ul class="text-sm text-blue-200 list-disc list-inside space-y-1">
+                                <li>An <code class="bg-slate-700 px-1 rounded">articles/</code> folder with your content</li>
+                                <li>GitHub Pages enabled in repository settings</li>
+                                <li>Public repository (or GitHub Pro for private repos)</li>
+                            </ul>
+                            <p class="text-xs text-blue-300 mt-2">
+                                Detected: <code class="bg-slate-700 px-1 rounded">${repoInfo.user}/${repoInfo.repo}</code>
+                            </p>
+                        </div>
+                    ` : `
+                        <div class="mt-4 p-4 bg-yellow-900/30 border border-yellow-500/30 rounded-lg">
+                            <h4 class="font-semibold text-yellow-300 mb-2">Local Development</h4>
+                            <p class="text-sm text-yellow-200">
+                                To deploy to GitHub Pages, push this to a GitHub repository and enable Pages in settings.
+                            </p>
+                        </div>
+                    `}
+                    
                     <button onclick="refreshPortfolio()" class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors">
                         Try Again
                     </button>
@@ -1073,16 +1358,16 @@
                 // Parse frontmatter and content
                 const { frontmatter, content } = parseFrontmatter(articleContent);
                 
-                // Find media files (videos, images)
+                // Find media files (videos, images, gifs)
                 const mediaFiles = files.filter(file => {
                     const ext = file.name.toLowerCase().split('.').pop();
-                    return ['mp4', 'webm', 'mov', 'avi', 'jpg', 'jpeg', 'png', 'gif', 'svg'].includes(ext);
+                    return ['mp4', 'webm', 'mov', 'avi', 'gif', 'jpg', 'jpeg', 'png', 'svg'].includes(ext);
                 });
 
-                // Find video files specifically
+                // Find video files and animated content (including GIFs)
                 const videoFiles = mediaFiles.filter(file => {
                     const ext = file.name.toLowerCase().split('.').pop();
-                    return ['mp4', 'webm', 'mov', 'avi'].includes(ext);
+                    return ['mp4', 'webm', 'mov', 'avi', 'gif'].includes(ext);
                 });
 
                 // Find thumbnail/preview images
@@ -1133,106 +1418,302 @@
             }
         }
 
-        // Create portfolio item HTML
-        function createPortfolioItem(article, index) {
-            const isEven = index % 2 === 0;
-            const div = document.createElement('div');
-            div.className = `portfolio-item grid lg:grid-cols-2 gap-8 items-center`;
-            
-            // Determine video or thumbnail to display
-            const primaryVideo = article.videoFiles[0];
-            const thumbnailUrl = article.thumbnailFile ? 
-                `${article.rawUrl}/${article.thumbnailFile.name}` : 
-                '/placeholder.svg?height=400&width=600';
+        // Create portfolio item HTML with media previews
+function createPortfolioItem(article, index) {
+    const isEven = index % 2 === 0;
+    const div = document.createElement('div');
+    div.className = `portfolio-item grid lg:grid-cols-2 gap-8 items-center`;
+    
+    // Determine primary media to display
+    const primaryVideo = article.videoFiles[0];
+    const isGif = primaryVideo && primaryVideo.name.toLowerCase().endsWith('.gif');
+    const thumbnailUrl = article.thumbnailFile ? 
+        `${article.rawUrl}/${article.thumbnailFile.name}` : 
+        null;
+    
+    // Use primary video/gif as preview, fallback to thumbnail
+    const previewUrl = primaryVideo ? `${article.rawUrl}/${primaryVideo.name}` : thumbnailUrl;
+    const previewType = primaryVideo ? (isGif ? 'gif' : 'video') : 'image';
 
-            const videoSection = `
-                <div class="${isEven ? '' : 'order-1 lg:order-2'} bg-slate-900/50 border border-slate-700 rounded-lg overflow-hidden">
-                    <div class="aspect-video bg-gradient-to-br ${article.frontmatter.gradient} flex items-center justify-center relative group cursor-pointer" onclick="openArticleModal('${article.id}')">
-                        ${article.thumbnailFile ? `
-                            <img src="${thumbnailUrl}" alt="${article.frontmatter.title}" class="absolute inset-0 w-full h-full object-cover opacity-60" />
-                        ` : ''}
-                        <div class="absolute inset-0 bg-black/20"></div>
-                        <div class="relative z-10 text-center">
-                            <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-white/30 transition-colors">
-                                ${primaryVideo ? `
-                                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M8 5v14l11-7z"/>
-                                    </svg>
-                                ` : `
-                                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                                    </svg>
-                                `}
-                            </div>
-                            <p class="text-white font-medium">${article.frontmatter.subtitle || article.frontmatter.title}</p>
-                            ${article.frontmatter.duration ? `<p class="text-slate-300 text-sm mt-1">${article.frontmatter.duration}</p>` : ''}
-                        </div>
-                        <div class="absolute top-4 right-4 bg-${article.frontmatter.badgeColor}-600 text-white px-2 py-1 rounded text-xs font-medium">
-                            ${article.frontmatter.badge}
-                        </div>
+    const videoSection = `
+        <div class="${isEven ? '' : 'order-1 lg:order-2'} bg-slate-900/50 border border-slate-700 rounded-lg overflow-hidden">
+            <div class="aspect-video bg-gradient-to-br ${article.frontmatter.gradient} preview-container relative group cursor-pointer" onclick="openArticleModal('${article.id}')">
+                <!-- Skeleton loader -->
+                <div class="media-skeleton"></div>
+                
+                <!-- Preview Media -->
+                ${previewUrl ? (previewType === 'video' ? `
+                    <video 
+                        class="preview-media" 
+                        muted 
+                        playsinline
+                        preload="metadata"
+                        onloadeddata="handleMediaLoad(this)"
+                        onerror="handleMediaError(this)"
+                    >
+                        <source src="${previewUrl}" type="video/${primaryVideo.name.split('.').pop()}">
+                    </video>
+                ` : previewType === 'gif' ? `
+                    <img 
+                        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='100%25' height='100%25' fill='%23334155'/%3E%3C/svg%3E" 
+                        alt="${article.frontmatter.title}" 
+                        class="preview-media gif-preview"
+                        data-gif-src="${previewUrl}"
+                        onload="handleMediaLoad(this); createStaticGifVersion(this, this.dataset.gifSrc);"
+                        onerror="handleMediaError(this)"
+                    />
+                ` : `
+                    <img 
+                        src="${previewUrl}" 
+                        alt="${article.frontmatter.title}" 
+                        class="preview-media"
+                        onload="handleMediaLoad(this)"
+                        onerror="handleMediaError(this)"
+                    />
+                `) : ''}
+                
+                <!-- Gradient overlay -->
+                <div class="preview-overlay"></div>
+                
+                <!-- Content overlay -->
+                <div class="relative z-10 text-center flex flex-col items-center justify-center h-full">
+                    <div class="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-white/30 group-hover:scale-110 transition-all duration-300">
+                        ${primaryVideo ? (isGif ? `
+                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        ` : `
+                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        `) : `
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                            </svg>
+                        `}
                     </div>
+                    <p class="text-white font-medium text-shadow-lg">${article.frontmatter.subtitle || article.frontmatter.title}</p>
+                    ${article.frontmatter.duration ? `<p class="text-slate-300 text-sm mt-1 text-shadow">${article.frontmatter.duration}</p>` : ''}
                 </div>
-            `;
-
-            const badgeColorMap = {
-                'red': 'green',
-                'green': 'purple', 
-                'yellow': 'blue',
-                'blue': 'orange'
-            };
-
-            const contentBadgeColor = badgeColorMap[article.frontmatter.badgeColor] || 'blue';
-            const featureBadgeColor = article.frontmatter.badgeColor === 'red' ? 'blue' : 
-                                    article.frontmatter.badgeColor === 'green' ? 'purple' : 'orange';
-
-            const contentSection = `
-                <div class="${isEven ? '' : 'order-2 lg:order-1'}">
-                    ${article.frontmatter.funding ? `
-                        <div class="inline-flex items-center px-3 py-1 bg-${contentBadgeColor}-600/20 text-${contentBadgeColor}-300 border border-${contentBadgeColor}-500/30 rounded-full text-sm mb-4">
-                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                            </svg>
-                            ${article.frontmatter.funding}
-                        </div>
-                    ` : ''}
-                    <h3 class="text-white font-semibold text-2xl mb-4">${article.frontmatter.title}</h3>
-                    <p class="text-slate-300 mb-4 leading-relaxed">${article.frontmatter.description}</p>
-                    ${article.frontmatter.features.length > 0 ? `
-                        <ul class="space-y-2 text-slate-300 text-sm mb-6">
-                            ${article.frontmatter.features.map(feature => `
-                                <li class="flex items-center">
-                                    <div class="w-1.5 h-1.5 bg-${featureBadgeColor}-400 rounded-full mr-3"></div>
-                                    ${feature}
-                                </li>
-                            `).join('')}
-                        </ul>
-                    ` : ''}
-                    ${article.frontmatter.fundingAmount ? `
-                        <div class="flex items-center text-sm text-slate-400">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
-                            </svg>
-                            ${article.frontmatter.fundingAmount}
-                        </div>
-                    ` : ''}
-                    ${article.frontmatter.tags.length > 0 ? `
-                        <div class="flex flex-wrap gap-2 mt-4">
-                            ${article.frontmatter.tags.map(tag => `
-                                <span class="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs">${tag}</span>
-                            `).join('')}
-                        </div>
-                    ` : ''}
+                
+                <!-- Badge -->
+                <div class="absolute top-4 right-4 bg-${article.frontmatter.badgeColor}-600 text-white px-2 py-1 rounded text-xs font-medium backdrop-blur-sm z-20">
+                    ${article.frontmatter.badge}
                 </div>
-            `;
+                
+                <!-- Media type indicator -->
+                ${primaryVideo ? `
+                    <div class="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-medium z-20">
+                        ${isGif ? 'GIF' : 'VIDEO'}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
 
-            div.innerHTML = videoSection + contentSection;
-            return div;
+    const badgeColorMap = {
+        'red': 'green',
+        'green': 'purple', 
+        'yellow': 'blue',
+        'blue': 'orange'
+    };
+
+    const contentBadgeColor = badgeColorMap[article.frontmatter.badgeColor] || 'blue';
+    const featureBadgeColor = article.frontmatter.badgeColor === 'red' ? 'blue' : 
+                            article.frontmatter.badgeColor === 'green' ? 'purple' : 'orange';
+
+    const contentSection = `
+        <div class="${isEven ? '' : 'order-2 lg:order-1'}">
+            ${article.frontmatter.funding ? `
+                <div class="inline-flex items-center px-3 py-1 bg-${contentBadgeColor}-600/20 text-${contentBadgeColor}-300 border border-${contentBadgeColor}-500/30 rounded-full text-sm mb-4">
+                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                    ${article.frontmatter.funding}
+                </div>
+            ` : ''}
+            <h3 class="text-white font-semibold text-2xl mb-4">${article.frontmatter.title}</h3>
+            <p class="text-slate-300 mb-4 leading-relaxed">${article.frontmatter.description}</p>
+            ${article.frontmatter.features.length > 0 ? `
+                <ul class="space-y-2 text-slate-300 text-sm mb-6">
+                    ${article.frontmatter.features.map(feature => `
+                        <li class="flex items-center">
+                            <div class="w-1.5 h-1.5 bg-${featureBadgeColor}-400 rounded-full mr-3"></div>
+                            ${feature}
+                        </li>
+                    `).join('')}
+                </ul>
+            ` : ''}
+            ${article.frontmatter.fundingAmount ? `
+                <div class="flex items-center text-sm text-slate-400">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                    </svg>
+                    ${article.frontmatter.fundingAmount}
+                </div>
+            ` : ''}
+            ${article.frontmatter.tags.length > 0 ? `
+                <div class="flex flex-wrap gap-2 mt-4">
+                    ${article.frontmatter.tags.map(tag => `
+                        <span class="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs">${tag}</span>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    div.innerHTML = videoSection + contentSection;
+    return div;
+}
+
+// Add these helper functions after the createPortfolioItem function:
+
+// Handle media loading states
+function handleMediaLoad(element) {
+    const container = element.closest('.preview-container');
+    if (container) {
+        container.classList.add('media-loaded');
+        element.classList.add('loaded');
+    }
+}
+
+function handleMediaError(element) {
+    const container = element.closest('.preview-container');
+    if (container) {
+        container.classList.add('media-loaded');
+        // Hide the failed media element
+        element.style.display = 'none';
+        console.warn('Failed to load media:', element.src);
+    }
+}
+
+// GIF handling functions
+function pauseGifAnimation(gifElement) {
+    if (gifElement.src.toLowerCase().endsWith('.gif')) {
+        // Store the original animated GIF URL
+        if (!gifElement.dataset.animatedSrc) {
+            gifElement.dataset.animatedSrc = gifElement.src;
         }
+        
+        // Capture current frame instead of always using first frame
+        captureCurrentFrame(gifElement);
+        
+        // Add click handler if not already added
+        if (!gifElement.dataset.clickHandlerAdded) {
+            gifElement.addEventListener('click', function(e) {
+                e.stopPropagation(); // Prevent modal from opening
+                if (this.classList.contains('gif-paused')) {
+                    // Start animation
+                    this.src = this.dataset.animatedSrc;
+                    this.style.filter = ''; // Remove any fallback filters
+                    this.classList.remove('gif-paused');
+                    this.classList.add('playing');
+                } else {
+                    // Pause on current frame
+                    captureCurrentFrame(this);
+                }
+            });
+            gifElement.dataset.clickHandlerAdded = 'true';
+        }
+    }
+}
+
+function toggleGifAnimation(gifElement) {
+    if (gifElement.classList.contains('gif-paused')) {
+        // Restore animated GIF
+        if (gifElement.dataset.animatedSrc) {
+            gifElement.src = gifElement.dataset.animatedSrc;
+            gifElement.classList.remove('gif-paused');
+            gifElement.classList.add('playing');
+        }
+    } else {
+        // Pause animation - capture current frame
+        captureCurrentFrame(gifElement);
+    }
+}
+
+// Function to capture the current frame of an animated GIF
+function captureCurrentFrame(gifElement) {
+    if (!gifElement.dataset.animatedSrc) {
+        return;
+    }
+    
+    try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = gifElement.naturalWidth || gifElement.width;
+        canvas.height = gifElement.naturalHeight || gifElement.height;
+        
+        // Draw the current frame (whatever is currently displayed)
+        ctx.drawImage(gifElement, 0, 0);
+        
+        // Convert current frame to static image
+        const currentFrameUrl = canvas.toDataURL('image/png');
+        
+        // Replace with current frame
+        gifElement.src = currentFrameUrl;
+        gifElement.classList.remove('playing');
+        gifElement.classList.add('gif-paused');
+        
+    } catch (e) {
+        console.warn('Could not capture current frame (likely CORS issue):', e);
+        // Fallback: Create a visual pause effect without canvas
+        fallbackPauseGif(gifElement);
+    }
+}
+
+// Fallback pause method when canvas/CORS fails
+function fallbackPauseGif(gifElement) {
+    // Create a paused state by stopping the GIF and adding visual indicators
+    // We can't capture the frame, but we can make it visually clear it's paused
+    
+    // Hide the current GIF
+    gifElement.style.filter = 'brightness(0.7) grayscale(0.3)';
+    gifElement.classList.remove('playing');
+    gifElement.classList.add('gif-paused');
+    
+    // Store the current src as the "paused" version
+    if (!gifElement.dataset.pausedSrc) {
+        gifElement.dataset.pausedSrc = gifElement.src;
+    }
+}
+
+// Preload media for better performance
+function preloadMedia(articles) {
+    articles.forEach(article => {
+        if (article.videoFiles.length > 0) {
+            const primaryVideo = article.videoFiles[0];
+            const mediaUrl = `${article.rawUrl}/${primaryVideo.name}`;
+            const isGif = primaryVideo.name.toLowerCase().endsWith('.gif');
+            
+            if (isGif) {
+                // Preload GIF
+                const img = new Image();
+                img.src = mediaUrl;
+            } else {
+                // Preload video metadata
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.src = mediaUrl;
+            }
+        }
+        
+        // Preload thumbnail
+        if (article.thumbnailFile) {
+            const img = new Image();
+            img.src = `${article.rawUrl}/${article.thumbnailFile.name}`;
+        }
+    });
+}
 
         // Load and display portfolio
         async function loadPortfolio() {
             const container = document.getElementById('portfolio-container');
             const countElement = document.getElementById('article-count');
+            
+            // Log repository detection for debugging
+            detectRepositoryInfo();
             
             showLoading(container, 'Loading articles from GitHub...');
             countElement.textContent = 'Loading articles...';
@@ -1256,6 +1737,10 @@
                     const portfolioItem = createPortfolioItem(article, index);
                     container.appendChild(portfolioItem);
                 });
+
+                // In the loadPortfolio function, after articles.forEach, add:
+                // Preload media for better performance
+                preloadMedia(articles);
 
                 countElement.textContent = `${articles.length} article${articles.length !== 1 ? 's' : ''} loaded`;
                 
@@ -1367,17 +1852,30 @@
                 htmlContent += '</div>';
             }
 
-            // Add videos if available
+            // Add videos and animated GIFs if available
             if (article.videoFiles.length > 0) {
                 htmlContent += '<div class="mb-6">';
                 article.videoFiles.forEach(video => {
                     const videoUrl = `${article.rawUrl}/${video.name}`;
-                    htmlContent += `
-                        <video class="article-video" controls poster="${article.thumbnailFile ? `${article.rawUrl}/${article.thumbnailFile.name}` : ''}">
-                            <source src="${videoUrl}" type="video/${video.name.split('.').pop()}">
-                            Your browser does not support the video tag.
-                        </video>
-                    `;
+                    const fileExt = video.name.toLowerCase().split('.').pop();
+                    
+                    if (fileExt === 'gif') {
+                        // Handle GIFs as images with special styling and pausing
+                        // Use a placeholder initially to prevent auto-playing
+                        htmlContent += `
+                            <div class="article-video bg-slate-900/50 border border-slate-700 rounded-lg overflow-hidden">
+                                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E%3Crect width='100%25' height='100%25' fill='%23334155'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%236B7280' font-size='16'%3ELoading...%3C/text%3E%3C/svg%3E" alt="Animation" class="w-full h-auto article-gif" data-gif-src="${videoUrl}" />
+                            </div>
+                        `;
+                    } else {
+                        // Handle regular video files
+                        htmlContent += `
+                            <video class="article-video" controls poster="${article.thumbnailFile ? `${article.rawUrl}/${article.thumbnailFile.name}` : ''}">
+                                <source src="${videoUrl}" type="video/${fileExt}">
+                                Your browser does not support the video tag.
+                            </video>
+                        `;
+                    }
                 });
                 htmlContent += '</div>';
             }
@@ -1410,6 +1908,92 @@
                 }
                 img.classList.add('article-image');
             });
+
+            // Process GIFs to create static versions
+            const articleGifs = container.querySelectorAll('.article-gif');
+            articleGifs.forEach(gif => {
+                const gifSrc = gif.dataset.gifSrc;
+                if (gifSrc) {
+                    createStaticGifVersion(gif, gifSrc);
+                }
+            });
+        }
+
+        // Function to create static version of GIF without showing animation first
+        function createStaticGifVersion(imgElement, gifUrl) {
+            const tempImg = new Image();
+            tempImg.crossOrigin = 'anonymous';
+            
+            tempImg.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = this.naturalWidth;
+                canvas.height = this.naturalHeight;
+                
+                // Draw the first frame
+                ctx.drawImage(this, 0, 0);
+                
+                try {
+                    // Convert to static image
+                    const staticImageUrl = canvas.toDataURL('image/png');
+                    
+                    // Update the img element with static version
+                    imgElement.src = staticImageUrl;
+                    imgElement.dataset.animatedSrc = gifUrl;
+                    imgElement.classList.add('gif-paused');
+                    
+                    // Add click handler to toggle between static and animated
+                    if (!imgElement.dataset.clickHandlerAdded) {
+                        imgElement.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            if (this.classList.contains('gif-paused')) {
+                                // Start animation
+                                this.src = this.dataset.animatedSrc;
+                                this.style.filter = ''; // Remove any fallback filters
+                                this.classList.remove('gif-paused');
+                                this.classList.add('playing');
+                            } else {
+                                // Pause on current frame
+                                captureCurrentFrame(this);
+                            }
+                        });
+                        imgElement.dataset.clickHandlerAdded = 'true';
+                    }
+                } catch (e) {
+                    // If canvas fails, load the original but mark as paused
+                    console.warn('Could not create static version of GIF:', e);
+                    imgElement.src = gifUrl;
+                    imgElement.dataset.animatedSrc = gifUrl;
+                    imgElement.classList.add('gif-paused');
+                    
+                    if (!imgElement.dataset.clickHandlerAdded) {
+                        imgElement.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            if (this.classList.contains('gif-paused')) {
+                                // Start animation
+                                this.src = this.dataset.animatedSrc;
+                                this.style.filter = ''; // Remove any fallback filters
+                                this.classList.remove('gif-paused');
+                                this.classList.add('playing');
+                            } else {
+                                // Pause on current frame
+                                captureCurrentFrame(this);
+                            }
+                        });
+                        imgElement.dataset.clickHandlerAdded = 'true';
+                    }
+                }
+            };
+            
+            tempImg.onerror = function() {
+                // Fallback to original GIF if loading fails
+                imgElement.src = gifUrl;
+                imgElement.dataset.animatedSrc = gifUrl;
+            };
+            
+            // Load the GIF in the hidden image
+            tempImg.src = gifUrl;
         }
 
         // Close modal when clicking outside
