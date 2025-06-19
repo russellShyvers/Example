@@ -28,8 +28,14 @@
     - Responsive design with video/GIF previews
     - Static GIF previews that play on click
     - Modal article viewer
-    - GitHub API integration with caching
+    - Direct file access (faster than API)
+    - GitHub API fallback
     - CORS-friendly media handling
+    
+    OPTIONAL: Create articles/index.json for faster loading:
+    {
+        "articles": ["test", "winglet", "project1", "project2"]
+    }
 -->
 <html lang="en">
 <head>
@@ -1097,7 +1103,7 @@
 
         // Manual configuration (set these if auto-detection doesn't work)
         const manualConfig = {
-            enabled: true, // Set to true to use manual config instead of auto-detection
+            enabled: false, // Set to true to use manual config instead of auto-detection
             githubUser: 'russellShyvers', // Your GitHub username
             githubRepo: 'Example', // Your repository name
             githubBranch: 'main',
@@ -1285,7 +1291,131 @@
             return { frontmatter, content: markdownContent };
         }
 
-        // Fetch articles from GitHub
+        // Try to access articles directly via file paths (GitHub Pages)
+        async function fetchArticlesDirectly() {
+            console.log('🔍 Trying direct file access...');
+            
+            try {
+                // For GitHub Pages, we can try to access a manifest file or scan common article folders
+                const commonFolders = ['test', 'winglet', 'project1', 'project2', 'example', 'demo', 'simulation'];
+                const articles = [];
+                
+                for (const folderName of commonFolders) {
+                    try {
+                        const article = await fetchArticleContentDirectly(folderName);
+                        if (article) {
+                            articles.push(article);
+                            console.log(`✅ Found article: ${folderName}`);
+                        }
+                    } catch (error) {
+                        // Folder doesn't exist, continue to next
+                        console.log(`❌ No article in: ${folderName}`);
+                    }
+                }
+                
+                // Also try to fetch from articles/index.json if it exists
+                try {
+                    const indexUrl = `https://${portfolioConfig.githubUser}.github.io/${portfolioConfig.githubRepo}/${portfolioConfig.articlesPath}/index.json`;
+                    const indexResponse = await fetch(indexUrl);
+                    if (indexResponse.ok) {
+                        const indexData = await indexResponse.json();
+                        console.log('📋 Found articles index:', indexData);
+                        // Process index data if it exists
+                        for (const folderName of indexData.articles || []) {
+                            if (!articles.find(a => a.slug === folderName)) {
+                                const article = await fetchArticleContentDirectly(folderName);
+                                if (article) articles.push(article);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log('📋 No articles index found, using folder scan');
+                }
+                
+                if (articles.length > 0) {
+                    console.log(`✅ Direct access found ${articles.length} articles`);
+                    return articles;
+                } else {
+                    throw new Error('No articles found via direct access');
+                }
+                
+            } catch (error) {
+                console.log('❌ Direct file access failed:', error.message);
+                throw error;
+            }
+        }
+
+        // Fetch individual article content directly
+        async function fetchArticleContentDirectly(folderName) {
+            try {
+                // Try multiple common markdown file names
+                const markdownFiles = ['article.md', 'README.md', 'index.md'];
+                let articleContent = null;
+                let markdownFileName = null;
+                
+                for (const fileName of markdownFiles) {
+                    try {
+                        const markdownUrl = `https://${portfolioConfig.githubUser}.github.io/${portfolioConfig.githubRepo}/${portfolioConfig.articlesPath}/${folderName}/${fileName}`;
+                        const response = await fetch(markdownUrl);
+                        if (response.ok) {
+                            articleContent = await response.text();
+                            markdownFileName = fileName;
+                            break;
+                        }
+                    } catch (e) {
+                        // Try next file
+                        continue;
+                    }
+                }
+                
+                if (!articleContent) {
+                    throw new Error(`No markdown file found in ${folderName}`);
+                }
+                
+                const { frontmatter, content } = parseFrontmatter(articleContent);
+                
+                // Set default values
+                frontmatter.title = frontmatter.title || folderName;
+                frontmatter.tags = frontmatter.tags || [];
+                frontmatter.date = frontmatter.date || new Date().toISOString().split('T')[0];
+                
+                // Try to detect media files by testing common extensions
+                const mediaExtensions = ['mp4', 'webm', 'gif', 'mov', 'avi'];
+                const videoFiles = [];
+                
+                for (const ext of mediaExtensions) {
+                    try {
+                        const mediaUrl = `https://${portfolioConfig.githubUser}.github.io/${portfolioConfig.githubRepo}/${portfolioConfig.articlesPath}/${folderName}/${folderName}.${ext}`;
+                        const testResponse = await fetch(mediaUrl, { method: 'HEAD' });
+                        if (testResponse.ok) {
+                            videoFiles.push({
+                                name: `${folderName}.${ext}`,
+                                path: `${folderName}/${folderName}.${ext}`,
+                                download_url: mediaUrl
+                            });
+                        }
+                    } catch (e) {
+                        // File doesn't exist, continue
+                    }
+                }
+                
+                const rawUrl = `https://${portfolioConfig.githubUser}.github.io/${portfolioConfig.githubRepo}/${portfolioConfig.articlesPath}/${folderName}`;
+                
+                return {
+                    slug: folderName,
+                    frontmatter,
+                    content,
+                    videoFiles,
+                    thumbnailFile: null, // Could be enhanced to detect thumbnails
+                    rawUrl
+                };
+                
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        // Fetch articles from GitHub (tries direct access first, then API)
         async function fetchArticlesFromGitHub() {
             try {
                 const cacheKey = 'articles-list';
@@ -1295,42 +1425,57 @@
                     return cached.data;
                 }
 
-                const response = await fetch(
-                    `https://api.github.com/repos/${portfolioConfig.githubUser}/${portfolioConfig.githubRepo}/contents/${portfolioConfig.articlesPath}`,
-                    {
-                        headers: {
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    }
-                );
-
-                if (!response.ok) {
-                    let errorMessage = `GitHub API error: ${response.status}`;
-                    if (response.status === 403) {
-                        errorMessage += ' - API rate limit exceeded or repository access denied. ';
-                        errorMessage += 'Make sure the repository exists and is public, or try again later.';
-                    } else if (response.status === 404) {
-                        errorMessage += ' - Repository or articles folder not found. ';
-                        errorMessage += `Check that ${portfolioConfig.githubUser}/${portfolioConfig.githubRepo} exists and has an '${portfolioConfig.articlesPath}' folder.`;
-                    }
-                    throw new Error(errorMessage);
-                }
-
-                const folders = await response.json();
-                const articles = [];
-
-                // Process each article folder
-                for (const folder of folders) {
-                    if (folder.type === 'dir') {
-                        try {
-                            const article = await fetchArticleContent(folder.name);
-                            if (article) {
-                                articles.push(article);
+                let articles = [];
+                
+                // Try direct file access first (faster, no rate limits)
+                try {
+                    console.log('🚀 Attempting direct file access...');
+                    articles = await fetchArticlesDirectly();
+                    console.log(`✅ Direct access successful: ${articles.length} articles found`);
+                } catch (directError) {
+                    console.log('⚠️ Direct access failed, falling back to GitHub API...');
+                    console.log('Direct access error:', directError.message);
+                    
+                    // Fallback to GitHub API
+                    const response = await fetch(
+                        `https://api.github.com/repos/${portfolioConfig.githubUser}/${portfolioConfig.githubRepo}/contents/${portfolioConfig.articlesPath}`,
+                        {
+                            headers: {
+                                'Accept': 'application/vnd.github.v3+json'
                             }
-                        } catch (error) {
-                            console.warn(`Failed to load article ${folder.name}:`, error);
+                        }
+                    );
+
+                    if (!response.ok) {
+                        let errorMessage = `GitHub API error: ${response.status}`;
+                        if (response.status === 403) {
+                            errorMessage += ' - API rate limit exceeded or repository access denied. ';
+                            errorMessage += 'Make sure the repository exists and is public, or try again later.';
+                        } else if (response.status === 404) {
+                            errorMessage += ' - Repository or articles folder not found. ';
+                            errorMessage += `Check that ${portfolioConfig.githubUser}/${portfolioConfig.githubRepo} exists and has an '${portfolioConfig.articlesPath}' folder.`;
+                        }
+                        throw new Error(errorMessage);
+                    }
+
+                    const folders = await response.json();
+                    articles = [];
+
+                    // Process each article folder
+                    for (const folder of folders) {
+                        if (folder.type === 'dir') {
+                            try {
+                                const article = await fetchArticleContent(folder.name);
+                                if (article) {
+                                    articles.push(article);
+                                }
+                            } catch (error) {
+                                console.warn(`Failed to load article ${folder.name}:`, error);
+                            }
                         }
                     }
+                    
+                    console.log(`✅ API access successful: ${articles.length} articles found`);
                 }
 
                 // Sort articles by date (newest first)
